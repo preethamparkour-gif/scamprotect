@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ScamShield — Check before you trust</title>
+  <style>
+    :root {
+      --bg:#0a0e16; --panel:#101723; --panel-2:#0c121c; --line:#1d2735;
+      --text:#e7ecf4; --muted:#8a97ab; --faint:#5d6a7e;
+      --blue:#1b5fb0; --blue-2:#2f81d6; --violet:#6c5ce7; --cyan:#22d3ee;
+      --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+      --font:"Inter","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+      --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    }
+    * { box-sizing:border-box; }
+    html { background:var(--bg); }
+    body {
+      margin:0; color:var(--text); font:14px/1.55 var(--font);
+      background:
+        radial-gradient(900px 400px at 85% -10%, #1a2a4a55, transparent 70%),
+        var(--bg);
+      min-height:100vh;
+    }
+    .shell { max-width:1180px; margin:0 auto; padding:20px 20px 40px; }
+
+    /* ---------- top bar ---------- */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      background:var(--panel); border:1px solid var(--line); border-radius:14px;
+      padding:12px 18px; margin-bottom:16px;
+    }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
+    .logo {
+      width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+      background:linear-gradient(135deg,var(--blue-2),var(--violet));
+    }
+    .logo svg { width:16px; height:16px; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .chip {
+      font-size:11px; font-weight:600; color:var(--muted);
+      border:1px solid var(--line); background:var(--panel-2);
+      padding:4px 10px; border-radius:99px;
+    }
+    .chip.live { color:var(--cyan); border-color:#164a57; }
+
+    /* ---------- stat cards ---------- */
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:14px; }
+    .stat {
+      background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+    }
+    .stat .label { font-size:12px; color:var(--muted); }
+    .stat .value { font-size:24px; font-weight:700; margin-top:4px; line-height:1.2; }
+    .stat .sub { font-size:11px; color:var(--faint); margin-top:4px; }
+    .stat .value.low { color:var(--green); }
+    .stat .value.medium { color:var(--amber); }
+    .stat .value.high { color:var(--red); }
+
+    /* ---------- panels ---------- */
+    .grid { display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:14px; margin-bottom:14px; }
+    .panel {
+      background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px;
+      min-width:0;
+    }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .panel-head h2 { font-size:14px; font-weight:650; margin:0; display:flex; align-items:center; gap:8px; }
+    .panel-head h2 svg { width:15px; height:15px; color:var(--muted); }
+    .hint { color:var(--muted); font-size:12px; }
+
+    label { display:block; font-weight:600; font-size:12px; color:var(--muted); margin:0 0 8px; }
+    textarea {
+      width:100%; min-height:230px; resize:vertical; padding:14px;
+      background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+      border-radius:10px; font:inherit; line-height:1.55;
+    }
+    textarea::placeholder { color:var(--faint); }
+    textarea:focus { outline:2px solid #2f81d655; border-color:var(--blue-2); }
+    .count { text-align:right; font-size:11px; color:var(--faint); margin:6px 0 12px; }
+    .actions { display:flex; gap:10px; }
+    button, .btn {
+      cursor:pointer; border:0; border-radius:8px; padding:10px 16px;
+      font:inherit; font-weight:650; font-size:13px; text-decoration:none;
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    }
+    button:focus-visible, .btn:focus-visible, a:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+    .primary { background:var(--violet); color:#fff; flex:1; }
+    .primary:hover { background:#7b6df0; }
+    .secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
+    button:disabled { opacity:.6; cursor:wait; }
+    .error { color:#ff8a8a; font-size:13px; margin:12px 0 0; }
+    .privacy { margin:14px 0 0; font-size:11px; color:var(--faint); }
+
+    /* ---------- gauge ---------- */
+    .gauge-wrap { display:grid; place-items:center; padding:6px 0 0; }
+    .gauge { width:100%; max-width:260px; }
+    .gauge .track { fill:none; stroke:#1b2433; stroke-width:14; stroke-linecap:round; }
+    .gauge .fill {
+      fill:none; stroke:var(--faint); stroke-width:14; stroke-linecap:round;
+      stroke-dasharray:251.33; stroke-dashoffset:251.33;
+      transition:stroke-dashoffset .6s ease, stroke .3s;
+    }
+    .gauge .num { fill:var(--text); font-size:30px; font-weight:700; text-anchor:middle; }
+    .gauge .cap { fill:var(--muted); font-size:9px; text-anchor:middle; }
+    .badge {
+      display:inline-block; font-size:11px; font-weight:700; padding:3px 10px; border-radius:99px;
+      border:1px solid var(--line); color:var(--muted);
+    }
+    .badge.low { color:var(--green); border-color:#0f5b45; background:#0b2a22; }
+    .badge.medium { color:var(--amber); border-color:#6a4a0a; background:#2a1f08; }
+    .badge.high { color:var(--red); border-color:#7a2323; background:#2d1212; }
+    .kv { margin-top:14px; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+    .kv div { display:flex; justify-content:space-between; gap:12px; padding:4px 0; font-size:12px; }
+    .kv span:first-child { color:var(--faint); font-family:var(--mono); }
+    .kv span:last-child { text-align:right; }
+
+    /* ---------- AI analyst ---------- */
+    .analyst {
+      background:#17153a; border:1px solid #2b2870; border-radius:10px; padding:12px 14px;
+      font-size:13px; color:#cfd0f5; min-height:90px;
+    }
+    .analyst strong { color:#fff; }
+    .empty { text-align:center; padding:34px 10px; color:var(--muted); }
+    .empty-icon {
+      width:48px; height:48px; border-radius:14px; margin:0 auto 12px; display:grid; place-items:center;
+      background:#16213a; color:var(--blue-2); font-size:22px;
+    }
+    .method { margin-top:12px; font-size:11px; color:var(--faint); }
+
+    /* ---------- threat + actions ---------- */
+    .threat-label { font-size:11px; color:var(--faint); margin-bottom:6px; }
+    .threat {
+      display:inline-block; font-weight:700; font-size:13px; padding:4px 12px;
+      border-radius:99px; margin-bottom:12px; border:1px solid var(--line); color:var(--muted);
+    }
+    .threat.low { color:var(--green); border-color:#0f5b45; background:#0b2a22; }
+    .threat.medium { color:var(--amber); border-color:#6a4a0a; background:#2a1f08; }
+    .threat.high { color:var(--red); border-color:#7a2323; background:#2d1212; }
+    .actions-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .sub-h { font-size:12px; color:var(--muted); font-weight:600; margin:0 0 10px; }
+    .reply {
+      display:flex; gap:10px; align-items:flex-start; justify-content:space-between;
+      background:var(--panel-2); border:1px solid var(--line); border-radius:10px;
+      padding:10px 12px; margin-bottom:10px; font-size:13px; color:#c3ccda;
+    }
+    .copy {
+      background:transparent; color:var(--blue-2); border:1px solid var(--line);
+      padding:4px 10px; font-size:11px; flex-shrink:0;
+    }
+    @media (max-width:980px) { .actions-grid { grid-template-columns:1fr; } }
+
+    /* ---------- lists / tables ---------- */
+    .wide { margin-bottom:14px; }
+    .finding { border-top:1px solid var(--line); padding:12px 0; display:grid; grid-template-columns:1fr auto; gap:4px 12px; }
+    .finding:first-of-type { border-top:0; }
+    .finding .title { font-weight:600; font-size:13px; }
+    .finding .rec { grid-column:1; color:var(--muted); font-size:12px; }
+    .finding .pts { grid-row:1; grid-column:2; font-family:var(--mono); font-size:12px; color:var(--amber); }
+    .src {
+      font-size:10px; font-weight:700; padding:1px 7px; border-radius:99px; margin-right:8px;
+      border:1px solid var(--line); color:var(--muted); vertical-align:middle;
+    }
+    .src.ai { color:#b4acff; border-color:#3b3590; }
+    .table-scroll { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; min-width:520px; }
+    th { text-align:left; font-size:12px; font-weight:600; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); }
+    td { padding:10px; font-size:12px; border-bottom:1px solid var(--line); vertical-align:top; }
+    td.url { font-family:var(--mono); overflow-wrap:anywhere; max-width:320px; }
+    .pill { font-size:11px; padding:2px 9px; border-radius:99px; border:1px solid var(--line); white-space:nowrap; }
+    .pill.low { color:var(--green); border-color:#0f5b45; background:#0b2a22; }
+    .pill.medium { color:var(--amber); border-color:#6a4a0a; background:#2a1f08; }
+    .pill.high { color:var(--red); border-color:#7a2323; background:#2d1212; }
+    ul.steps { margin:0; padding-left:18px; }
+    ul.steps li { margin-bottom:8px; color:#c3ccda; font-size:13px; }
+
+    /* ---------- report callout ---------- */
+    .report {
+      background:#2a1115; border:1px solid #7a2323; border-radius:12px;
+      padding:16px 18px; margin-bottom:14px;
+      display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    }
+    .report h3 { margin:0 0 4px; font-size:14px; color:#ffb4b4; }
+    .report p { margin:0; font-size:13px; color:#e3bcbc; max-width:620px; }
+    .report p a { color:#fff; font-weight:700; }
+    .report-btn { background:var(--red); color:#fff; padding:11px 20px; }
+    .report-btn:hover { background:#f05555; }
+
+    .disclaimer { font-size:11px; color:var(--faint); text-align:center; margin:18px 0 0; }
+    .topbar { flex-wrap:wrap; }
+    .nav-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+    .nav-controls select { color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; }
+    .history-list { display:grid; gap:8px; }
+    .history-row { background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:12px; }
+    .history-preview { margin:0 0 6px; overflow-wrap:anywhere; white-space:pre-wrap; }
+    .history-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .history-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    #historyPanel .panel-head { flex-wrap:wrap; gap:8px; }
+    [hidden] { display:none !important; }
+
+    @media (max-width:980px) {
+      .stats { grid-template-columns:repeat(2,1fr); }
+      .grid { grid-template-columns:1fr; }
+    }
+    @media (max-width:520px) {
+      .shell { padding:12px 12px 32px; }
+      .chips .chip:not(.live) { display:none; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      .gauge .fill { transition:none; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      ScamShield
+    </div>
+    <div class="chips">
+      <span class="chip live" id="engineChip" data-i18n="tagline">Check before you trust</span>
+    </div>
+    <nav class="nav-controls">
+      <select id="interfaceLanguage" aria-label="Interface language" data-i18n-aria="locale">
+        {% for code, name in languages.items() %}
+        <option value="{{ code }}" lang="{{ code }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+      <button id="historyButton" class="secondary" type="button" aria-expanded="false" aria-controls="historyPanel" data-i18n="history">History</button>
+    </nav>
+  </header>
+
+  <section id="historyPanel" class="panel wide" aria-labelledby="historyTitle" hidden>
+    <div class="panel-head">
+      <h2 id="historyTitle" tabindex="-1" data-i18n="history">History</h2>
+      <button id="clearHistoryButton" class="secondary" type="button" data-i18n="clear_history" disabled>Clear All History</button>
+    </div>
+    <p class="hint" id="historyStatus" role="status"></p>
+    <p class="error" id="historyError" role="alert" hidden></p>
+    <div class="empty" id="historyEmpty" hidden>
+      <div class="empty-icon" aria-hidden="true">◇</div>
+      <p data-i18n="history_empty">No analyses yet. Check a message to start your history.</p>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </section>
+
+  <!-- stat cards -->
+  <section class="stats" aria-label="Summary" data-i18n-aria="summary">
+    <div class="stat">
+      <div class="label" data-i18n="threat_level">Threat level</div>
+      <div class="value" id="statLevel">—</div>
+      <div class="sub" id="statLevelSub">Waiting for a message</div>
+    </div>
+    <div class="stat">
+      <div class="label" data-i18n="score">Risk score</div>
+      <div class="value" id="statScore">—</div>
+      <div class="sub" data-i18n="out100">Out of 100</div>
+    </div>
+    <div class="stat">
+      <div class="label" data-i18n="warning_signs">Warning signs</div>
+      <div class="value" id="statFindings">—</div>
+      <div class="sub" data-i18n="rules_ai">Rules and AI combined</div>
+    </div>
+    <div class="stat">
+      <div class="label" data-i18n="links_found">Links found</div>
+      <div class="value" id="statUrls">—</div>
+      <div class="sub" data-i18n="not_opened">Not opened or fetched</div>
+    </div>
+  </section>
+
+  <!-- main grid -->
+  <div class="grid">
+
+    <section class="panel" aria-labelledby="inputTitle">
+      <div class="panel-head">
+        <h2 id="inputTitle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4V5z"/></svg>
+          <span data-i18n="check">Check a message</span>
+        </h2>
+        <span class="hint" data-i18n="input_hint">SMS, email text, or link</span>
+      </div>
+
+      <form id="analysisForm" novalidate>
+        <label for="message" data-i18n="message">Message or link</label>
+        <textarea id="message" dir="auto" maxlength="12000" required spellcheck="false"
+          placeholder="Paste the suspicious content here…" data-i18n-placeholder="placeholder"
+          aria-describedby="privacy count"></textarea>
+        <div id="count" class="count">0 / 12,000</div>
+
+        <div class="actions">
+          <button id="analyzeButton" class="primary" type="submit" data-i18n="analyze">Analyze message</button>
+          <button id="clearButton" class="secondary" type="button" data-i18n="clear">Clear</button>
+        </div>
+        <p id="error" class="error" role="alert" hidden></p>
+      </form>
+
+      <p id="privacy" class="privacy" data-i18n="privacy">Do not paste real passwords, one-time codes or account numbers.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="gaugeTitle" id="resultPanel" tabindex="-1" aria-busy="false">
+      <div class="panel-head">
+        <h2 id="gaugeTitle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+          <span data-i18n="risk_index">Risk index</span>
+        </h2>
+        <span id="riskBadge" class="badge">No result</span>
+      </div>
+
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 200 120" role="progressbar" id="meter"
+             aria-label="Risk score" data-i18n-aria="score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <path class="track" d="M20 100 A80 80 0 0 1 180 100"/>
+          <path class="fill" id="gaugeFill" d="M20 100 A80 80 0 0 1 180 100"/>
+          <text class="num" x="100" y="92" id="gaugeNum">–</text>
+          <text class="cap" x="100" y="108" data-i18n="score">Overall risk score</text>
+        </svg>
+      </div>
+      <p class="hint" id="status" role="status" aria-live="polite" style="text-align:center;margin:6px 0 0">
+        Results will appear after analysis.
+      </p>
+
+      <div class="kv">
+        <div><span data-i18n="language">LANGUAGE</span><span id="kvLang">—</span></div>
+        <div><span data-i18n="engine">ENGINE</span><span id="kvEngine">—</span></div>
+        <div><span data-i18n="rules">RULES</span><span id="kvRules">—</span></div>
+        <div><span data-i18n="ai_signals">AI SIGNALS</span><span id="kvAi">—</span></div>
+        <div><span data-i18n="version">VERSION</span><span id="kvVersion">—</span></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="aiTitle">
+      <div class="panel-head">
+        <h2 id="aiTitle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V3M9 13h.01M15 13h.01"/></svg>
+          <span data-i18n="threat_analysis">Threat analysis</span>
+        </h2>
+      </div>
+
+      <div id="empty" class="empty">
+        <div class="empty-icon" aria-hidden="true">◇</div>
+        <strong data-i18n="caution">A little caution goes a long way</strong>
+        <p class="hint" data-i18n="paste_signs">Paste a message to see which warning signs appear.</p>
+      </div>
+
+      <div id="aiBox" hidden>
+        <div class="threat-label" data-i18n="threat_type">Threat type</div>
+        <div class="threat" id="threatType"></div>
+        <div class="analyst" id="aiSummary"></div>
+        <div class="analyst" id="actionLine" style="margin-top:10px;min-height:0" hidden></div>
+        <p class="method" id="method"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- cybercrime report -->
+  <section id="reportBox" class="report" hidden aria-live="polite">
+    <div>
+      <h3 data-i18n="report_title">This message looks risky. You can report it.</h3>
+      <p id="reportNote"></p>
+    </div>
+    <a id="reportBtn" class="btn report-btn" target="_blank" rel="noopener noreferrer" href="#">Report to Cybercrime Portal</a>
+  </section>
+
+  <section class="panel wide" id="findingsPanel" hidden>
+    <div class="panel-head"><h2 data-i18n="findings">Detected warning signs</h2></div>
+    <div id="findings"></div>
+  </section>
+
+  <section class="panel wide" id="urlSection" hidden>
+    <div class="panel-head"><h2 data-i18n="url_checks">URL checks</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th data-i18n="link">Link</th><th data-i18n="url_risk">URL risk</th><th data-i18n="why">Why</th></tr></thead>
+        <tbody id="urls"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel wide" id="actionPanel" hidden>
+    <div class="panel-head"><h2 data-i18n="next">What to do next</h2></div>
+    <div class="actions-grid">
+      <div>
+        <h3 class="sub-h" data-i18n="verify">Verify it safely</h3>
+        <ul class="steps" id="verifySteps"></ul>
+      </div>
+      <div>
+        <h3 class="sub-h" data-i18n="replies">Suggested safe responses</h3>
+        <div id="safeResponses"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel wide" id="recsPanel" hidden>
+    <div class="panel-head"><h2 data-i18n="advice">More safety advice</h2></div>
+    <ul class="steps" id="recommendations"></ul>
+  </section>
+
+  <p id="resultLanguage" class="disclaimer" hidden></p>
+  <p class="disclaimer" id="disclaimer">
+    ScamShield supports your judgment. It cannot guarantee that a message is safe.
+  </p>
+</div>
+
+<script id="translations" type="text/plain">
+tagline|Check before you trust|भरोसे से पहले जाँचें|నమ్మే ముందు తనిఖీ చేయండి|நம்புமுன் சரிபார்க்கவும்|বিশ্বাসের আগে যাচাই করুন|विश्वास ठेवण्यापूर्वी तपासा|ನಂಬುವ ಮೊದಲು ಪರಿಶೀಲಿಸಿ|വിശ്വസിക്കും മുമ്പ് പരിശോധിക്കുക|વિશ્વાસ કરતાં પહેલાં ચકાસો
+locale|Interface language|इंटरफ़ेस की भाषा|ఇంటర్‌ఫేస్ భాష|இடைமுக மொழி|ইন্টারফেসের ভাষা|इंटरफेसची भाषा|ಇಂಟರ್‌ಫೇಸ್ ಭಾಷೆ|ഇന്റർഫേസ് ഭാഷ|ઇન્ટરફેસની ભાષા
+summary|Summary|सारांश|సారాంశం|சுருக்கம்|সারাংশ|सारांश|ಸಾರಾಂಶ|സംഗ്രഹം|સારાંશ
+threat_level|Threat level|खतरे का स्तर|ముప్పు స్థాయి|அச்சுறுத்தல் நிலை|হুমকির মাত্রা|धोक्याची पातळी|ಬೆದರಿಕೆಯ ಮಟ್ಟ|ഭീഷണി നില|જોખમનું સ્તર
+waiting|Waiting for a message|संदेश की प्रतीक्षा|సందేశం కోసం వేచి ఉంది|செய்திக்காகக் காத்திருக்கிறது|বার্তার অপেক্ষায়|संदेशाची प्रतीक्षा|ಸಂದೇಶಕ್ಕಾಗಿ ಕಾಯುತ್ತಿದೆ|സന്ദേശത്തിനായി കാത്തിരിക്കുന്നു|સંદેશની રાહ
+score|Risk score|जोखिम स्कोर|ప్రమాద స్కోరు|ஆபத்து மதிப்பெண்|ঝুঁকির স্কোর|जोखीम गुण|ಅಪಾಯದ ಅಂಕ|അപകടസാധ്യതാ സ്കോർ|જોખમ સ્કોર
+out100|Out of 100|100 में से|100లో|100 இல்|১০০-এর মধ্যে|१०० पैकी|100ರಲ್ಲಿ|100-ൽ|100માંથી
+warning_signs|Warning signs|चेतावनी संकेत|హెచ్చరిక సంకేతాలు|எச்சரிக்கை அறிகுறிகள்|সতর্কসংকেত|इशाऱ्याची चिन्हे|ಎಚ್ಚರಿಕೆ ಚಿಹ್ನೆಗಳು|മുന്നറിയിപ്പ് സൂചനകൾ|ચેતવણીનાં સંકેતો
+rules_ai|Rules and AI combined|नियम और AI दोनों|నియమాలు మరియు AI కలిపి|விதிகளும் AI-யும் சேர்ந்து|নিয়ম ও AI একসঙ্গে|नियम आणि AI एकत्र|ನಿಯಮಗಳು ಮತ್ತು AI ಒಟ್ಟಿಗೆ|നിയമങ്ങളും AI-യും ചേർന്ന്|નિયમો અને AI સાથે
+links_found|Links found|मिले हुए लिंक|కనిపించిన లింక్‌లు|கண்ட இணைப்புகள்|পাওয়া লিংক|सापडलेल्या लिंक|ಸಿಕ್ಕ ಲಿಂಕ್‌ಗಳು|കണ്ടെത്തിയ ലിങ്കുകൾ|મળેલી લિંક્સ
+not_opened|Not opened or fetched|खोले या लोड नहीं किए गए|తెరవలేదు, లోడ్ చేయలేదు|திறக்கப்படவோ ஏற்றப்படவோ இல்லை|খোলা বা লোড করা হয়নি|उघडल्या किंवा लोड केल्या नाहीत|ತೆರೆದಿಲ್ಲ ಅಥವಾ ಲೋಡ್ ಮಾಡಿಲ್ಲ|തുറക്കുകയോ ലോഡ് ചെയ്യുകയോ ചെയ്തിട്ടില്ല|ખોલી કે લોડ કરી નથી
+check|Check a message|संदेश जाँचें|సందేశాన్ని తనిఖీ చేయండి|செய்தியைச் சரிபார்க்கவும்|বার্তা যাচাই করুন|संदेश तपासा|ಸಂದೇಶ ಪರಿಶೀಲಿಸಿ|സന്ദേശം പരിശോധിക്കുക|સંદેશ ચકાસો
+input_hint|SMS, email text, or link|SMS, ईमेल का पाठ या लिंक|SMS, ఇమెయిల్ టెక్స్ట్ లేదా లింక్|SMS, மின்னஞ்சல் உரை அல்லது இணைப்பு|SMS, ইমেইলের লেখা বা লিংক|SMS, ईमेलचा मजकूर किंवा लिंक|SMS, ಇಮೇಲ್ ಪಠ್ಯ ಅಥವಾ ಲಿಂಕ್|SMS, ഇമെയിൽ ഉള്ളടക്കം, അല്ലെങ്കിൽ ലിങ്ക്|SMS, ઈમેઇલનું લખાણ અથવા લિંક
+message|Message or link|संदेश या लिंक|సందేశం లేదా లింక్|செய்தி அல்லது இணைப்பு|বার্তা বা লিংক|संदेश किंवा लिंक|ಸಂದೇಶ ಅಥವಾ ಲಿಂಕ್|സന്ദേശം അല്ലെങ്കിൽ ലിങ്ക്|સંદેશ અથવા લિંક
+placeholder|Paste the suspicious content here…|संदिग्ध सामग्री यहाँ पेस्ट करें…|అనుమానాస్పద సందేశాన్ని ఇక్కడ అతికించండి…|சந்தேகமான உள்ளடக்கத்தை இங்கே ஒட்டவும்…|সন্দেহজনক লেখা এখানে পেস্ট করুন…|संशयास्पद मजकूर इथे पेस्ट करा…|ಅನುಮಾನಾಸ್ಪದ ಪಠ್ಯವನ್ನು ಇಲ್ಲಿ ಅಂಟಿಸಿ…|സംശയാസ്പദ ഉള്ളടക്കം ഇവിടെ ഒട്ടിക്കുക…|શંકાસ્પદ લખાણ અહીં પેસ્ટ કરો…
+analyze|Analyze message|संदेश का विश्लेषण करें|సందేశాన్ని విశ్లేషించండి|செய்தியைப் பகுப்பாய்வு செய்|বার্তা বিশ্লেষণ করুন|संदेशाचे विश्लेषण करा|ಸಂದೇಶ ವಿಶ್ಲೇಷಿಸಿ|സന്ദേശം വിലയിരുത്തുക|સંદેશનું વિશ્લેષણ કરો
+clear|Clear|साफ़ करें|తొలగించండి|அழி|মুছুন|रिकामे करा|ಅಳಿಸಿ|മായ്ക്കുക|સાફ કરો
+privacy|Do not paste real passwords, one-time codes or account numbers. The app saves analyses on this computer and sends text to Google Gemini when enabled. Links are not opened. Hinglish and Tenglish are supported.|असली पासवर्ड, OTP या खाता नंबर पेस्ट न करें। विश्लेषण इस कंप्यूटर पर सहेजे जाते हैं और Gemini चालू होने पर संदेश Google को भेजा जाता है। लिंक नहीं खोले जाते। Hinglish और Tenglish समर्थित हैं।|అసలు పాస్‌వర్డ్‌లు, OTPలు లేదా ఖాతా నంబర్లు అతికించవద్దు. ఫలితాలు ఈ కంప్యూటర్‌లో సేవ్ అవుతాయి; Gemini ఆన్‌లో ఉంటే సందేశం Googleకు వెళ్తుంది. లింక్‌లు తెరవబడవు. Hinglish, Tenglishకు మద్దతు ఉంది.|உண்மையான கடவுச்சொல், OTP அல்லது கணக்கு எண்ணை ஒட்டாதீர்கள். முடிவுகள் இக்கணினியில் சேமிக்கப்படும்; Gemini இயக்கத்தில் இருந்தால் உரை Google-க்கு அனுப்பப்படும். இணைப்புகள் திறக்கப்படாது. Hinglish, Tenglish ஆதரிக்கப்படும்.|আসল পাসওয়ার্ড, OTP বা অ্যাকাউন্ট নম্বর পেস্ট করবেন না। ফল এই কম্পিউটারে সেভ হয়; Gemini চালু থাকলে লেখা Google-এ যায়। লিংক খোলা হয় না। Hinglish ও Tenglish সমর্থিত।|खरे पासवर्ड, OTP किंवा खाते क्रमांक पेस्ट करू नका. निकाल या संगणकावर साठवले जातात; Gemini सुरू असल्यास मजकूर Google ला पाठवला जातो. लिंक उघडल्या जात नाहीत. Hinglish आणि Tenglish समर्थित आहेत.|ನಿಜವಾದ ಪಾಸ್‌ವರ್ಡ್, OTP ಅಥವಾ ಖಾತೆ ಸಂಖ್ಯೆ ಅಂಟಿಸಬೇಡಿ. ಫಲಿತಾಂಶ ಈ ಕಂಪ್ಯೂಟರ್‌ನಲ್ಲಿ ಉಳಿಯುತ್ತದೆ; Gemini ಸಕ್ರಿಯವಾಗಿದ್ದರೆ ಪಠ್ಯ Googleಗೆ ಹೋಗುತ್ತದೆ. ಲಿಂಕ್ ತೆರೆಯುವುದಿಲ್ಲ. Hinglish ಮತ್ತು Tenglish ಬೆಂಬಲಿತ.|യഥാർത്ഥ പാസ്‌വേഡ്, OTP, അക്കൗണ്ട് നമ്പർ എന്നിവ ഒട്ടിക്കരുത്. ഫലം ഈ കമ്പ്യൂട്ടറിൽ സൂക്ഷിക്കും; Gemini പ്രവർത്തനക്ഷമമെങ്കിൽ ഉള്ളടക്കം Google-ലേക്ക് അയയ്ക്കും. ലിങ്കുകൾ തുറക്കില്ല. Hinglish, Tenglish എന്നിവ പിന്തുണയ്ക്കുന്നു.|અસલી પાસવર્ડ, OTP કે ખાતા નંબર પેસ્ટ ન કરો. પરિણામો આ કમ્પ્યુટર પર સાચવાય છે; Gemini ચાલુ હોય તો લખાણ Googleને મોકલાય છે. લિંક્સ ખોલાતી નથી. Hinglish અને Tenglish સમર્થિત છે.
+risk_index|Risk index|जोखिम सूचकांक|ప్రమాద సూచిక|ஆபத்துக் குறியீடு|ঝুঁকির সূচক|जोखीम निर्देशांक|ಅಪಾಯ ಸೂಚ್ಯಂಕ|അപകടസാധ്യതാ സൂചിക|જોખમ સૂચકાંક
+no_result|No result|कोई परिणाम नहीं|ఫలితం లేదు|முடிவு இல்லை|ফল নেই|निकाल नाही|ಫಲಿತಾಂಶ ಇಲ್ಲ|ഫലമില്ല|પરિણામ નથી
+initial|Results will appear after analysis.|विश्लेषण के बाद परिणाम दिखेंगे।|విశ్లేషణ తర్వాత ఫలితాలు కనిపిస్తాయి.|பகுப்பாய்வுக்குப் பிறகு முடிவுகள் தோன்றும்.|বিশ্লেষণের পরে ফল দেখা যাবে।|विश्लेषणानंतर निकाल दिसतील.|ವಿಶ್ಲೇಷಣೆಯ ನಂತರ ಫಲಿತಾಂಶ ಕಾಣುತ್ತದೆ.|വിലയിരുത്തലിനുശേഷം ഫലം കാണാം.|વિશ્લેષણ પછી પરિણામ દેખાશે.
+language|Detected language|पहचानी गई भाषा|గుర్తించిన భాష|கண்டறிந்த மொழி|শনাক্ত ভাষা|ओळखलेली भाषा|ಪತ್ತೆಯಾದ ಭಾಷೆ|തിരിച്ചറിഞ്ഞ ഭാഷ|ઓળખાયેલી ભાષા
+engine|Engine|विश्लेषण विधि|విశ్లేషణ విధానం|பகுப்பாய்வு முறை|বিশ্লেষণ পদ্ধতি|विश्लेषण पद्धत|ವಿಶ್ಲೇಷಣಾ ವಿಧಾನ|വിശകലന രീതി|વિશ્લેષણ પદ્ધતિ
+rules|Rules|नियम|నియమాలు|விதிகள்|নিয়ম|नियम|ನಿಯಮಗಳು|നിയമങ്ങൾ|નિયમો
+ai_signals|AI signals|AI संकेत|AI సంకేతాలు|AI அறிகுறிகள்|AI সংকেত|AI संकेत|AI ಸೂಚನೆಗಳು|AI സൂചനകൾ|AI સંકેતો
+version|Version|संस्करण|సంస్కరణ|பதிப்பு|সংস্করণ|आवृत्ती|ಆವೃತ್ತಿ|പതിപ്പ്|આવૃત્તિ
+threat_analysis|Threat analysis|खतरे का विश्लेषण|ముప్పు విశ్లేషణ|அச்சுறுத்தல் பகுப்பாய்வு|হুমকি বিশ্লেষণ|धोक्याचे विश्लेषण|ಬೆದರಿಕೆಯ ವಿಶ್ಲೇಷಣೆ|ഭീഷണി വിലയിരുത്തൽ|જોખમનું વિશ્લેષણ
+caution|A little caution goes a long way|थोड़ी सावधानी बहुत काम आती है|కొద్దిపాటి జాగ్రత్త ఎంతో ఉపయోగపడుతుంది|சிறிது எச்சரிக்கை பெரிய உதவி|একটু সতর্কতা অনেক কাজে আসে|थोडी सावधगिरी उपयुक्त ठरते|ಸ್ವಲ್ಪ ಎಚ್ಚರಿಕೆ ಬಹಳ ಉಪಯುಕ್ತ|അൽപ്പം ജാഗ്രത ഏറെ സഹായിക്കും|થોડી સાવચેતી ઘણી ઉપયોગી છે
+paste_signs|Paste a message to see warning signs.|चेतावनी संकेत देखने के लिए संदेश पेस्ट करें।|హెచ్చరిక సంకేతాల కోసం సందేశాన్ని అతికించండి.|எச்சரிக்கை அறிகுறிகளைக் காண செய்தியை ஒட்டவும்.|সতর্কসংকেত দেখতে বার্তা পেস্ট করুন।|इशारे पाहण्यासाठी संदेश पेस्ट करा.|ಎಚ್ಚರಿಕೆ ಗುರುತುಗಳನ್ನು ನೋಡಲು ಸಂದೇಶ ಅಂಟಿಸಿ.|മുന്നറിയിപ്പ് സൂചനകൾ കാണാൻ സന്ദേശം ഒട്ടിക്കുക.|ચેતવણીનાં સંકેતો જોવા સંદેશ પેસ્ટ કરો.
+threat_type|Threat type|खतरे का प्रकार|ముప్పు రకం|அச்சுறுத்தல் வகை|হুমকির ধরন|धोक्याचा प्रकार|ಬೆದರಿಕೆಯ ಬಗೆ|ഭീഷണിയുടെ തരം|જોખમનો પ્રકાર
+report_title|This message looks risky. You can report it.|यह संदेश संदिग्ध है। आप इसकी रिपोर्ट कर सकते हैं।|ఈ సందేశం ప్రమాదకరంగా కనిపిస్తోంది. నివేదించవచ్చు.|இந்தச் செய்தி ஆபத்தாகத் தெரிகிறது. புகாரளிக்கலாம்.|বার্তাটি ঝুঁকিপূর্ণ মনে হচ্ছে। রিপোর্ট করতে পারেন।|संदेश धोकादायक वाटतो. तक्रार करू शकता.|ಈ ಸಂದೇಶ ಅಪಾಯಕಾರಿಯಾಗಿ ಕಾಣುತ್ತದೆ. ವರದಿ ಮಾಡಬಹುದು.|ഈ സന്ദേശം അപകടകരമായി തോന്നുന്നു. റിപ്പോർട്ട് ചെയ്യാം.|આ સંદેશ જોખમી લાગે છે. તમે તેની જાણ કરી શકો છો.
+report|Report to Cybercrime Portal|साइबर अपराध पोर्टल पर रिपोर्ट करें|సైబర్ నేర పోర్టల్‌లో నివేదించండి|இணையக் குற்றத் தளத்தில் புகாரளிக்கவும்|সাইবার অপরাধ পোর্টালে রিপোর্ট করুন|सायबर गुन्हे पोर्टलवर तक्रार करा|ಸೈಬರ್ ಅಪರಾಧ ಪೋರ್ಟಲ್‌ನಲ್ಲಿ ವರದಿ ಮಾಡಿ|സൈബർ ക്രൈം പോർട്ടലിൽ റിപ്പോർട്ട് ചെയ്യുക|સાયબર ગુના પોર્ટલ પર રિપોર્ટ કરો
+findings|Detected warning signs|मिले चेतावनी संकेत|గుర్తించిన హెచ్చరిక సంకేతాలు|கண்ட எச்சரிக்கை அறிகுறிகள்|চিহ্নিত সতর্কসংকেত|सापडलेली इशाऱ्याची चिन्हे|ಪತ್ತೆಯಾದ ಎಚ್ಚರಿಕೆ ಸೂಚನೆಗಳು|കണ്ടെത്തിയ മുന്നറിയിപ്പ് സൂചനകൾ|મળેલા ચેતવણી સંકેતો
+url_checks|URL checks|URL की जाँच|URL తనిఖీలు|URL சோதனை|URL পরীক্ষা|URL तपासणी|URL ಪರಿಶೀಲನೆ|URL പരിശോധന|URL તપાસ
+link|Link|लिंक|లింక్|இணைப்பு|লিংক|लिंक|ಲಿಂಕ್|ലിങ്ക്|લિંક
+url_risk|URL risk|URL का जोखिम|URL ప్రమాదం|URL ஆபத்து|URL ঝুঁকি|URL जोखीम|URL ಅಪಾಯ|URL അപകടസാധ്യത|URL જોખમ
+why|Why|कारण|కారణం|காரணம்|কারণ|कारण|ಕಾರಣ|കാരണം|કારણ
+next|What to do next|अब क्या करें|తదుపరి చర్య|அடுத்து என்ன செய்வது|এরপর কী করবেন|पुढे काय करावे|ಮುಂದೆ ಏನು ಮಾಡಬೇಕು|അടുത്തതായി ചെയ്യേണ്ടത്|હવે શું કરવું
+verify|Verify it safely|सुरक्षित तरीके से पुष्टि करें|సురక్షితంగా ధృవీకరించండి|பாதுகாப்பாகச் சரிபார்க்கவும்|নিরাপদে যাচাই করুন|सुरक्षितपणे खात्री करा|ಸುರಕ್ಷಿತವಾಗಿ ಪರಿಶೀಲಿಸಿ|സുരക്ഷിതമായി പരിശോധിക്കുക|સુરક્ષિત રીતે ચકાસો
+replies|Suggested safe responses|सुरक्षित जवाब के सुझाव|సురక్షిత జవాబు సూచనలు|பாதுகாப்பான பதில் பரிந்துரைகள்|নিরাপদ উত্তরের পরামর্শ|सुचवलेली सुरक्षित उत्तरे|ಸುರಕ್ಷಿತ ಉತ್ತರದ ಸಲಹೆಗಳು|സുരക്ഷിത മറുപടി നിർദ്ദേശങ്ങൾ|સુરક્ષિત જવાબના સૂચનો
+advice|More safety advice|अधिक सुरक्षा सलाह|మరిన్ని భద్రతా సూచనలు|மேலும் பாதுகாப்பு ஆலோசனை|আরও নিরাপত্তা পরামর্শ|अधिक सुरक्षितता सल्ला|ಹೆಚ್ಚಿನ ಸುರಕ್ಷತಾ ಸಲಹೆ|കൂടുതൽ സുരക്ഷാ നിർദ്ദേശങ്ങൾ|વધુ સુરક્ષા સલાહ
+caveat|ScamShield cannot guarantee that a message is safe.|ScamShield संदेश की सुरक्षा की गारंटी नहीं देता।|ScamShield సందేశ భద్రతకు హామీ ఇవ్వదు.|ScamShield செய்தியின் பாதுகாப்பை உறுதி செய்யாது.|ScamShield বার্তার নিরাপত্তা নিশ্চিত করে না।|ScamShield संदेशाच्या सुरक्षिततेची हमी देत नाही.|ScamShield ಸಂದೇಶದ ಸುರಕ್ಷತೆಯನ್ನು ಖಚಿತಪಡಿಸುವುದಿಲ್ಲ.|ScamShield സന്ദേശത്തിന്റെ സുരക്ഷ ഉറപ്പുനൽകുന്നില്ല.|ScamShield સંદેશ સુરક્ષિત હોવાની ખાતરી આપતું નથી.
+low|Low|कम|తక్కువ|குறைவு|কম|कमी|ಕಡಿಮೆ|കുറവ്|ઓછું
+medium|Medium|मध्यम|మధ్యస్థం|நடுத்தரம்|মাঝারি|मध्यम|ಮಧ್ಯಮ|ഇടത്തരം|મધ્યમ
+high|High|अधिक|ఎక్కువ|அதிகம்|বেশি|जास्त|ಹೆಚ್ಚು|ഉയർന്നത്|ઊંચું
+local|Local rules|स्थानीय नियम|స్థానిక నియమాలు|உள்ளூர் விதிகள்|স্থানীয় নিয়ম|स्थानिक नियम|ಸ್ಥಳೀಯ ನಿಯಮಗಳು|ലോക്കൽ നിയമങ്ങൾ|સ્થાનિક નિયમો
+hybrid|Rules + Gemini|नियम + Gemini|నియమాలు + Gemini|விதிகள் + Gemini|নিয়ম + Gemini|नियम + Gemini|ನಿಯಮಗಳು + Gemini|നിയമങ്ങൾ + Gemini|નિયમો + Gemini
+unknown|Unknown|अज्ञात|తెలియదు|தெரியவில்லை|অজানা|अज्ञात|ಅಜ್ಞಾತ|അറിയില്ല|અજ્ઞાત
+romanized|Latin script|लैटिन लिपि|లాటిన్ లిపి|இலத்தீன் எழுத்துமுறை|লাতিন লিপি|लॅटिन लिपी|ಲ್ಯಾಟಿನ್ ಲಿಪಿ|ലാറ്റിൻ ലിപി|લેટિન લિપિ
+ai_analyst|AI analyst|AI विश्लेषक|AI విశ్లేషకుడు|AI பகுப்பாய்வு|AI বিশ্লেষণ|AI विश्लेषक|AI ವಿಶ್ಲೇಷಕ|AI വിലയിരുത്തൽ|AI વિશ્લેષક
+local_check|Local check|स्थानीय जाँच|స్థానిక తనిఖీ|உள்ளூர் சோதனை|স্থানীয় যাচাই|स्थानिक तपासणी|ಸ್ಥಳೀಯ ಪರಿಶೀಲನೆ|ലോക്കൽ പരിശോധന|સ્થાનિક તપાસ
+ai_down|AI unavailable; built-in rules were used.|AI उपलब्ध नहीं था; अंतर्निहित नियम इस्तेमाल हुए।|AI అందుబాటులో లేదు; అంతర్నిర్మిత నియమాలు వాడాం.|AI கிடைக்கவில்லை; உள்ளமைந்த விதிகள் பயன்படுத்தப்பட்டன.|AI পাওয়া যায়নি; অন্তর্নির্মিত নিয়ম ব্যবহৃত হয়েছে।|AI उपलब्ध नव्हते; अंगभूत नियम वापरले.|AI ಲಭ್ಯವಿರಲಿಲ್ಲ; ಅಂತರ್ನಿರ್ಮಿತ ನಿಯಮಗಳನ್ನು ಬಳಸಲಾಗಿದೆ.|AI ലഭ്യമായില്ല; ഉൾപ്പെടുത്തിയ നിയമങ്ങൾ ഉപയോഗിച്ചു.|AI ઉપલબ્ધ નહોતું; મૂળ નિયમો વપરાયા.
+translation_down|AI translation unavailable; showing local guidance with the original score.|AI अनुवाद उपलब्ध नहीं था; मूल स्कोर के साथ स्थानीय सलाह दिखाई गई है।|AI అనువాదం అందుబాటులో లేదు; అసలు స్కోరుతో స్థానిక సూచనలు చూపుతున్నాం.|AI மொழிபெயர்ப்பு கிடைக்கவில்லை; அசல் மதிப்பெண்ணுடன் உள்ளூர் வழிகாட்டல் காட்டப்படுகிறது.|AI অনুবাদ পাওয়া যায়নি; মূল স্কোরসহ স্থানীয় পরামর্শ দেখানো হচ্ছে।|AI भाषांतर उपलब्ध नव्हते; मूळ गुणांसह स्थानिक सल्ला दाखवला आहे.|AI ಅನುವಾದ ಲಭ್ಯವಿಲ್ಲ; ಮೂಲ ಅಂಕದೊಂದಿಗೆ ಸ್ಥಳೀಯ ಸಲಹೆ ತೋರಿಸಲಾಗಿದೆ.|AI വിവർത്തനം ലഭ്യമായില്ല; യഥാർത്ഥ സ്കോറിനൊപ്പം ലോക്കൽ നിർദ്ദേശം കാണിക്കുന്നു.|AI અનુવાદ ઉપલબ્ધ નહોતો; મૂળ સ્કોર સાથે સ્થાનિક સલાહ બતાવી છે.
+helpline|Helpline|हेल्पलाइन|సహాయవాణి|உதவி எண்|হেল্পলাইন|हेल्पलाइन|ಸಹಾಯವಾಣಿ|ഹെൽപ്‌ലൈൻ|હેલ્પલાઇન
+no_signs|No warning signs matched. This does not guarantee safety.|कोई चेतावनी संकेत नहीं मिला। यह सुरक्षा की गारंटी नहीं है।|హెచ్చరికలు సరిపోలలేదు. ఇది భద్రతకు హామీ కాదు.|எச்சரிக்கை அறிகுறி பொருந்தவில்லை. இது பாதுகாப்புக்கான உத்தரவாதமல்ல.|সতর্কসংকেত মেলেনি। এতে নিরাপত্তা নিশ্চিত নয়।|इशाऱ्याची चिन्हे जुळली नाहीत. ही सुरक्षिततेची हमी नाही.|ಎಚ್ಚರಿಕೆ ಚಿಹ್ನೆಗಳು ಹೊಂದಲಿಲ್ಲ. ಇದು ಸುರಕ್ಷತೆಯ ಖಾತರಿಯಲ್ಲ.|മുന്നറിയിപ്പ് സൂചനകളൊന്നും കണ്ടെത്തിയില്ല. ഇത് സുരക്ഷ ഉറപ്പാക്കുന്നില്ല.|ચેતવણીનાં સંકેતો મળ્યા નથી. આ સુરક્ષાની ખાતરી નથી.
+rule|Rule|नियम|నియమం|விதி|নিয়ম|नियम|ನಿಯಮ|നിയമം|નિયમ
+no_flags|No flags|कोई संकेत नहीं|సంకేతాలు లేవు|அறிகுறி இல்லை|সংকেত নেই|संकेत नाहीत|ಸೂಚನೆಗಳಿಲ್ಲ|സൂചനകളില്ല|સંકેત નથી
+url_unverified|No URL warning signs found. The destination was not verified.|URL में कोई संकेत नहीं मिला। गंतव्य सत्यापित नहीं है।|URLలో హెచ్చరికలు కనిపించలేదు. గమ్యస్థానం ధృవీకరించలేదు.|URL எச்சரிக்கை இல்லை. இலக்கு சரிபார்க்கப்படவில்லை.|URL সতর্কসংকেত মেলেনি। গন্তব্য যাচাই করা হয়নি।|URL मध्ये इशारा दिसला नाही. गंतव्य तपासलेले नाही.|URL ಎಚ್ಚರಿಕೆ ಸಿಗಲಿಲ್ಲ. ಗಮ್ಯಸ್ಥಳ ಪರಿಶೀಲಿಸಲಾಗಿಲ್ಲ.|URL മുന്നറിയിപ്പില്ല. ലക്ഷ്യസ്ഥാനം പരിശോധിച്ചിട്ടില്ല.|URLમાં ચેતવણી મળી નથી. ગંતવ્ય ચકાસ્યું નથી.
+copy|Copy|कॉपी करें|కాపీ చేయండి|நகலெடு|কপি করুন|कॉपी करा|ನಕಲಿಸಿ|പകർത്തുക|કૉપી કરો
+copied|Copied|कॉपी किया|కాపీ అయింది|நகலெடுக்கப்பட்டது|কপি হয়েছে|कॉपी झाले|ನಕಲಿಸಲಾಗಿದೆ|പകർത്തി|કૉપી થયું
+copy_error|Copy failed|कॉपी नहीं हुआ|కాపీ కాలేదు|நகலெடுக்க முடியவில்லை|কপি হয়নি|कॉपी झाले नाही|ನಕಲಿಸಲು ಆಗಲಿಲ್ಲ|പകർത്താനായില്ല|કૉપી ન થયું
+complete|Analysis complete|विश्लेषण पूरा हुआ|విశ్లేషణ పూర్తయింది|பகுப்பாய்வு முடிந்தது|বিশ্লেষণ সম্পন্ন|विश्लेषण पूर्ण|ವಿಶ್ಲೇಷಣೆ ಪೂರ್ಣ|വിലയിരുത്തൽ പൂർത്തിയായി|વિશ્લેષણ પૂર્ણ
+working|Analyzing…|विश्लेषण हो रहा है…|విశ్లేషిస్తున్నాం…|பகுப்பாய்வு நடக்கிறது…|বিশ্লেষণ চলছে…|विश्लेषण सुरू आहे…|ವಿಶ್ಲೇಷಿಸಲಾಗುತ್ತಿದೆ…|വിലയിരുത്തുന്നു…|વિશ્લેષણ થઈ રહ્યું છે…
+failed|Request could not be completed.|अनुरोध पूरा नहीं हो सका।|అభ్యర్థన పూర్తి కాలేదు.|கோரிக்கையை முடிக்க முடியவில்லை.|অনুরোধ সম্পন্ন করা যায়নি।|विनंती पूर्ण झाली नाही.|ವಿನಂತಿ ಪೂರ್ಣಗೊಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.|അഭ്യർത്ഥന പൂർത്തിയാക്കാനായില്ല.|વિનંતી પૂર્ણ ન થઈ.
+timeout|The request timed out. Try again.|समय सीमा खत्म हुई। फिर कोशिश करें।|సమయం ముగిసింది. మళ్లీ ప్రయత్నించండి.|நேரம் முடிந்தது. மீண்டும் முயலவும்.|সময় শেষ। আবার চেষ্টা করুন।|वेळ संपली. पुन्हा प्रयत्न करा.|ಸಮಯ ಮೀರಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.|സമയപരിധി കഴിഞ്ഞു. വീണ്ടും ശ്രമിക്കുക.|સમય મર્યાદા પૂરી થઈ. ફરી પ્રયાસ કરો.
+empty_input|Paste a message or link to analyze.|विश्लेषण के लिए संदेश या लिंक पेस्ट करें।|విశ్లేషణకు సందేశం లేదా లింక్ అతికించండి.|பகுப்பாய்வுக்குச் செய்தி அல்லது இணைப்பை ஒட்டவும்.|বিশ্লেষণের জন্য বার্তা বা লিংক পেস্ট করুন।|विश्लेषणासाठी संदेश किंवा लिंक पेस्ट करा.|ವಿಶ್ಲೇಷಿಸಲು ಸಂದೇಶ ಅಥವಾ ಲಿಂಕ್ ಅಂಟಿಸಿ.|വിലയിരുത്താൻ സന്ദേശമോ ലിങ്കോ ഒട്ടിക്കുക.|વિશ્લેષણ માટે સંદેશ કે લિંક પેસ્ટ કરો.
+invalid|Invalid request.|अमान्य अनुरोध।|చెల్లని అభ్యర్థన.|தவறான கோரிக்கை.|অবৈধ অনুরোধ।|अवैध विनंती.|ಅಮಾನ್ಯ ವಿನಂತಿ.|അസാധുവായ അഭ്യർത്ഥന.|અમાન્ય વિનંતી.
+invalid_language|Unsupported language.|यह भाषा समर्थित नहीं है।|ఈ భాషకు మద్దతు లేదు.|இந்த மொழிக்கு ஆதரவில்லை.|এই ভাষা সমর্থিত নয়।|ही भाषा समर्थित नाही.|ಈ ಭಾಷೆಗೆ ಬೆಂಬಲವಿಲ್ಲ.|ഈ ഭാഷ പിന്തുണയ്ക്കുന്നില്ല.|આ ભાષા સમર્થિત નથી.
+too_long|Use up to 12,000 characters.|12,000 तक वर्ण इस्तेमाल करें।|12,000 అక్షరాలకు మించవద్దు.|12,000 எழுத்துகளுக்கு மிகாமல் இடவும்.|১২,০০০ অক্ষরের মধ্যে রাখুন।|१२,००० पर्यंत वर्ण वापरा.|12,000 ಅಕ್ಷರಗಳವರೆಗೆ ಬಳಸಿ.|12,000 അക്ഷരങ്ങൾ വരെ ഉപയോഗിക്കുക.|12,000 અક્ષરો સુધી લખો.
+storage|Local history storage is unavailable.|स्थानीय इतिहास का भंडारण उपलब्ध नहीं है।|స్థానిక చరిత్ర నిల్వ అందుబాటులో లేదు.|உள்ளூர் வரலாற்றுச் சேமிப்பு கிடைக்கவில்லை.|স্থানীয় ইতিহাস সংরক্ষণ ব্যবহার করা যাচ্ছে না।|स्थानिक इतिहास साठवण उपलब्ध नाही.|ಸ್ಥಳೀಯ ಇತಿಹಾಸ ಸಂಗ್ರಹ ಲಭ್ಯವಿಲ್ಲ.|ലോക്കൽ ചരിത്ര സംഭരണം ലഭ്യമല്ല.|સ્થાનિક ઇતિહાસ સંગ્રહ ઉપલબ્ધ નથી.
+missing|History entry not found.|इतिहास की प्रविष्टि नहीं मिली।|చరిత్ర నమోదు కనిపించలేదు.|வரலாற்றுப் பதிவு கிடைக்கவில்லை.|ইতিহাসের এন্ট্রি পাওয়া যায়নি।|इतिहासातील नोंद सापडली नाही.|ಇತಿಹಾಸ ದಾಖಲೆ ಸಿಗಲಿಲ್ಲ.|ചരിത്ര രേഖ കണ്ടെത്തിയില്ല.|ઇતિહાસની નોંધ મળી નથી.
+history|History|इतिहास|చరిత్ర|வரலாறு|ইতিহাস|इतिहास|ಇತಿಹಾಸ|ചരിത്രം|ઇતિહાસ
+history_empty|No analyses yet. Check a message to start your history.|अभी कोई विश्लेषण नहीं है। शुरू करने के लिए संदेश जाँचें।|ఇంకా విశ్లేషణలు లేవు. ప్రారంభించడానికి సందేశాన్ని తనిఖీ చేయండి.|இதுவரை பகுப்பாய்வுகள் இல்லை. தொடங்க செய்தியைச் சரிபார்க்கவும்.|এখনও কোনো বিশ্লেষণ নেই। শুরু করতে বার্তা যাচাই করুন।|अजून विश्लेषण नाही. सुरुवातीस संदेश तपासा.|ಇನ್ನೂ ವಿಶ್ಲೇಷಣೆಗಳಿಲ್ಲ. ಪ್ರಾರಂಭಿಸಲು ಸಂದೇಶ ಪರಿಶೀಲಿಸಿ.|ഇതുവരെ വിലയിരുത്തലുകളില്ല. തുടക്കത്തിന് ഒരു സന്ദേശം പരിശോധിക്കുക.|હજુ કોઈ વિશ્લેષણ નથી. શરૂ કરવા સંદેશ ચકાસો.
+view|View Details|विवरण देखें|వివరాలు చూడండి|விவரங்களைக் காண்|বিবরণ দেখুন|तपशील पाहा|ವಿವರ ನೋಡಿ|വിശദാംശങ്ങൾ കാണുക|વિગતો જુઓ
+delete|Delete|हटाएँ|తొలగించండి|நீக்கு|মুছুন|हटवा|ಅಳಿಸಿ|ഇല്ലാതാക്കുക|કાઢી નાખો
+clear_history|Clear All History|पूरा इतिहास मिटाएँ|మొత్తం చరిత్ర తొలగించండి|முழு வரலாற்றையும் அழி|সব ইতিহাস মুছুন|सर्व इतिहास हटवा|ಎಲ್ಲಾ ಇತಿಹಾಸ ಅಳಿಸಿ|മുഴുവൻ ചരിത്രവും മായ്ക്കുക|સમગ્ર ઇતિહાસ સાફ કરો
+confirm|Permanently delete all saved analyses?|सभी सहेजे गए विश्लेषण हमेशा के लिए मिटाएँ?|సేవ్ చేసిన విశ్లేషణలన్నీ శాశ్వతంగా తొలగించాలా?|சேமித்த எல்லாப் பகுப்பாய்வுகளையும் நிரந்தரமாக நீக்கவா?|সেভ করা সব বিশ্লেষণ স্থায়ীভাবে মুছবেন?|सर्व जतन केलेले विश्लेषण कायमचे हटवायचे?|ಉಳಿಸಿದ ಎಲ್ಲಾ ವಿಶ್ಲೇಷಣೆಗಳನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸಬೇಕೇ?|സംരക്ഷിച്ച എല്ലാ വിലയിരുത്തലുകളും സ്ഥിരമായി മായ്ക്കണോ?|બધાં સાચવેલા વિશ્લેષણ કાયમ માટે કાઢી નાખવા છે?
+loading|Loading history…|इतिहास लोड हो रहा है…|చరిత్ర లోడ్ అవుతోంది…|வரலாறு ஏற்றப்படுகிறது…|ইতিহাস লোড হচ্ছে…|इतिहास लोड होत आहे…|ಇತಿಹಾಸ ಲೋಡ್ ಆಗುತ್ತಿದೆ…|ചരിത്രം ലോഡ് ചെയ്യുന്നു…|ઇતિહાસ લોડ થઈ રહ્યો છે…
+result_language|Report language|रिपोर्ट की भाषा|నివేదిక భాష|அறிக்கை மொழி|রিপোর্টের ভাষা|अहवालाची भाषा|ವರದಿಯ ಭಾಷೆ|റിപ്പോർട്ട് ഭാഷ|રિપોર્ટની ભાષા
+</script>
+<script>
+  const $ = id => document.getElementById(id);
+  const message = $("message");
+  const GAUGE_LENGTH = 251.33;
+  const COLORS = { low: "#10b981", medium: "#f59e0b", high: "#ef4444" };
+  let revision = 0;
+  let locale = "en";
+  let currentResult = null;
+  let historyMode = false;
+  let analyzing = false;
+  let analysisError = "";
+  let historyEntries = null;
+  let historyBusy = false;
+  let historyError = "";
+  const localeCodes = ["en", "hi", "te", "ta", "bn", "mr", "kn", "ml", "gu"];
+  const ui = Object.fromEntries(document.getElementById("translations").textContent.trim().split("\n").map(line => {
+    const [key, ...values] = line.split("|");
+    return [key, values];
+  }));
+  const t = key => ui[key]?.[localeCodes.indexOf(locale)] ?? ui.failed[localeCodes.indexOf(locale)];
+  const number = value => Number(value).toLocaleString(locale);
+
+  function languageName(lang) {
+    if (!lang?.code || lang.code === "und") return lang?.name && lang.name.toLowerCase() !== "unknown" ? lang.name : t("unknown");
+    let name = lang.name || lang.code;
+    try { name = new Intl.DisplayNames([locale], {type: "language", fallback: "none"}).of(lang.code) || name; }
+    catch { /* A nonstandard detection code can be displayed as returned. */ }
+    if (lang.romanized) {
+      const alias = {hi: "Hinglish", te: "Tenglish"}[lang.code];
+      return `${name} (${alias ? alias + " · " : ""}${t("romanized")})`;
+    }
+    return name;
+  }
+
+  function narrative(text, lang) {
+    const el = node("span", text);
+    el.lang = lang;
+    return el;
+  }
+
+  function engineName(data) {
+    return String(data.method || "").startsWith("Local") ? t("local") : t("hybrid");
+  }
+
+  function updateCount() {
+    $("count").textContent = `${number(message.value.length)} / ${number(12000)}`;
+  }
+
+  function applyLocale() {
+    document.documentElement.lang = locale;
+    document.title = `ScamShield — ${t("tagline")}`;
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(el => el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder)));
+    updateCount();
+    if (currentResult) render(currentResult);
+    else resetResult();
+    updateAnalysisStatus();
+    renderHistory();
+  }
+
+  // All server-supplied text is rendered with textContent, never innerHTML.
+  function node(tag, text, className) {
+    const el = document.createElement(tag);
+    if (text !== undefined && text !== null) el.textContent = text;
+    if (className) el.className = className;
+    return el;
+  }
+
+  function setLevelClass(el, level, base) {
+    el.className = base + (level ? " " + level : "");
+  }
+
+  function resetResult() {
+    currentResult = null;
+    historyMode = false;
+    $("resultLanguage").hidden = true;
+    $("disclaimer").removeAttribute("lang");
+    $("statLevelSub").removeAttribute("lang");
+    $("disclaimer").textContent = t("caveat");
+    $("empty").hidden = false;
+    $("aiBox").hidden = true;
+    ["reportBox", "findingsPanel", "urlSection", "actionPanel", "recsPanel"].forEach(id => $(id).hidden = true);
+    $("statLevel").textContent = "—";
+    setLevelClass($("statLevel"), "", "value");
+    $("statLevelSub").textContent = t("waiting");
+    $("statScore").textContent = "—";
+    $("statFindings").textContent = "—";
+    $("statUrls").textContent = "—";
+    $("gaugeNum").textContent = "–";
+    $("gaugeFill").style.strokeDashoffset = GAUGE_LENGTH;
+    $("gaugeFill").style.stroke = "";
+    $("riskBadge").textContent = t("no_result");
+    setLevelClass($("riskBadge"), "", "badge");
+    ["kvLang", "kvEngine", "kvRules", "kvAi", "kvVersion"].forEach(id => $(id).textContent = "—");
+    $("actionLine").hidden = true;
+    $("meter").setAttribute("aria-valuenow", "0");
+    $("status").textContent = t("initial");
+    $("error").hidden = true;
+  }
+
+  message.addEventListener("input", () => {
+    revision += 1;
+    analysisError = "";
+    updateCount();
+    resetResult();
+    updateAnalysisStatus();
+  });
+
+  $("clearButton").addEventListener("click", () => {
+    message.value = "";
+    message.dispatchEvent(new Event("input"));
+    message.focus();
+  });
+
+  function urlLevel(points) {
+    if (points >= 25) return "high";
+    if (points >= 10) return "medium";
+    return "low";
+  }
+
+  function render(data) {
+    currentResult = data;
+    const reportLocale = data.interface_language || "en";
+    ["threatType", "statLevelSub", "reportBtn", "disclaimer", "verifySteps", "recommendations"].forEach(id => $(id).lang = reportLocale);
+    $("resultLanguage").textContent = `${t("result_language")}: ${languageName({code: reportLocale})}`;
+    $("resultLanguage").hidden = reportLocale === locale && !historyMode;
+    const level = String(data.level || "Low").toLowerCase();
+    const findings = Array.isArray(data.findings) ? data.findings : [];
+    const urls = Array.isArray(data.urls) ? data.urls : [];
+    const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
+    const aiCount = findings.filter(f => String(f.id).startsWith("ai_signal")).length;
+    const ruleCount = findings.length - aiCount;
+
+    // stat cards
+    $("statLevel").textContent = t(level);
+    setLevelClass($("statLevel"), level, "value");
+    const analysis = data.analysis || {};
+    $("statLevelSub").textContent = analysis.threat_type || t("unknown");
+    $("statScore").textContent = number(data.score);
+    $("statFindings").textContent = number(findings.length);
+    $("statUrls").textContent = number(urls.length);
+
+    // gauge
+    $("gaugeNum").textContent = new Intl.NumberFormat(locale, {style: "percent"}).format(data.score / 100);
+    $("gaugeFill").style.stroke = COLORS[level];
+    $("gaugeFill").style.strokeDashoffset = GAUGE_LENGTH * (1 - data.score / 100);
+    $("meter").setAttribute("aria-valuenow", String(data.score));
+    $("riskBadge").textContent = t(level);
+    setLevelClass($("riskBadge"), level, "badge");
+    $("kvEngine").textContent = engineName(data);
+    const lang = data.language || {};
+    $("kvLang").textContent = languageName(lang);
+    $("kvRules").textContent = number(ruleCount);
+    $("kvAi").textContent = number(aiCount);
+    $("kvVersion").textContent = data.rules_version || "—";
+
+    // AI analyst
+    $("empty").hidden = true;
+    $("aiBox").hidden = false;
+    const threat = $("threatType");
+    threat.textContent = analysis.threat_type || t("unknown");
+    threat.className = "threat " + level;
+    const summary = $("aiSummary");
+    summary.replaceChildren();
+    const explanation = analysis.explanation || data.summary || "";
+    if (analysis.source === "ai") {
+      summary.append(node("strong", t("ai_analyst") + ": "), narrative(explanation, reportLocale));
+    } else {
+      summary.append(node("strong", t("local_check") + ": "), narrative(explanation, reportLocale));
+      summary.append(node("div", t(data.translation_fallback ? "translation_down" : "ai_down"), "method"));
+    }
+    const actionLine = $("actionLine");
+    actionLine.replaceChildren();
+    if (analysis.recommended_action) {
+      actionLine.append(node("strong", t("next") + ": "), narrative(analysis.recommended_action, reportLocale));
+      actionLine.hidden = false;
+    } else {
+      actionLine.hidden = true;
+    }
+    $("method").textContent = `${engineName(data)} · ${t("not_opened")}`;
+
+    // cybercrime report
+    const report = data.report;
+    if (report && report.show) {
+      $("reportNote").replaceChildren(
+        narrative((report.note || "") + " ", reportLocale), document.createTextNode(t("helpline") + ": "),
+        (() => {
+          const a = node("a", report.helpline || "1930");
+          a.href = "tel:" + String(report.helpline || "1930").replace(/[^0-9+]/g, "");
+          return a;
+        })()
+      );
+      $("reportBtn").textContent = t("report");
+      $("reportBtn").lang = locale;
+      $("reportBtn").href = report.url === "https://cybercrime.gov.in" ? report.url : "https://cybercrime.gov.in";
+      $("reportBox").hidden = false;
+    } else {
+      $("reportBox").hidden = true;
+    }
+
+    // findings
+    const list = $("findings");
+    list.replaceChildren();
+    if (!findings.length) {
+      list.append(node("p",
+        t("no_signs"),
+        "hint"));
+    }
+    for (const f of findings) {
+      const isAi = String(f.id).startsWith("ai_signal");
+      const item = node("div", "", "finding");
+      const title = node("div", "", "title");
+      title.append(node("span", isAi ? "AI" : t("rule"), "src" + (isAi ? " ai" : "")),
+                   narrative(String(f.title).replace(/^AI:\s*/, ""), reportLocale));
+      item.append(title, node("div", `+${number(f.points)}`, "pts"));
+      if (f.recommendation) {
+        const rec = node("div", f.recommendation, "rec");
+        rec.lang = reportLocale;
+        item.append(rec);
+      }
+      list.append(item);
+    }
+    $("findingsPanel").hidden = false;
+
+    // URLs
+    $("urlSection").hidden = urls.length === 0;
+    const tbody = $("urls");
+    tbody.replaceChildren();
+    for (const u of urls) {
+      const row = document.createElement("tr");
+      const lvl = urlLevel(u.points || 0);
+      const pill = node("span", u.points ? `${t(lvl)} · +${number(u.points)}` : t("no_flags"), "pill " + lvl);
+      const tdPill = document.createElement("td");
+      tdPill.append(pill);
+      row.append(
+        node("td", u.url, "url"),
+        tdPill,
+        node("td")
+      );
+      const why = row.lastElementChild;
+      why.append(u.reasons?.length ? narrative(u.reasons.join(" "), reportLocale) : t("url_unverified"));
+      tbody.append(row);
+    }
+
+    // what to do next
+    const steps = Array.isArray(analysis.verification_steps) ? analysis.verification_steps : [];
+    const replies = Array.isArray(analysis.safe_responses) ? analysis.safe_responses : [];
+    $("verifySteps").replaceChildren(...steps.map(t => node("li", t)));
+    const replyBox = $("safeResponses");
+    replyBox.replaceChildren();
+    for (const text of replies) {
+      const row = node("div", "", "reply");
+      const btn = node("button", t("copy"), "copy");
+      btn.type = "button";
+      btn.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(text); btn.textContent = t("copied"); }
+        catch { btn.textContent = t("copy_error"); }
+        setTimeout(() => { btn.textContent = t("copy"); }, 1800);
+      });
+      row.append(narrative(text, reportLocale), btn);
+      replyBox.append(row);
+    }
+    $("actionPanel").hidden = steps.length === 0 && replies.length === 0;
+
+    // recommendations
+    $("recommendations").replaceChildren(...recs.map(t => node("li", t)));
+    $("recsPanel").hidden = recs.length === 0;
+
+    if (data.disclaimer) $("disclaimer").textContent = data.disclaimer;
+    $("status").textContent = `${t("complete")} · ${t("threat_level")}: ${t(level)} · ${number(data.score)} / ${number(100)}`;
+  }
+
+  function updateAnalysisStatus() {
+    $("analyzeButton").disabled = analyzing;
+    $("analyzeButton").textContent = t(analyzing ? "working" : "analyze");
+    $("resultPanel").setAttribute("aria-busy", String(analyzing));
+    $("error").hidden = !analysisError;
+    $("error").textContent = analysisError ? t(analysisError) : "";
+    if (analyzing) $("status").textContent = t("working");
+    else if (analysisError) $("status").textContent = t("failed");
+    else if (!currentResult) $("status").textContent = t("initial");
+  }
+
+  async function api(path, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 50000);
+    try {
+      const response = await fetch(path, {...options, signal: controller.signal});
+      let data;
+      try { data = await response.json(); }
+      catch (error) { if (error.name === "AbortError") throw error; throw new Error("failed"); }
+      if (!response.ok) throw new Error(data.error_code || "failed");
+      return data;
+    } finally { clearTimeout(timeout); }
+  }
+
+  function errorKey(error) {
+    if (error.name === "AbortError") return "timeout";
+    if (error.message === "too_large") return "too_long";
+    if (error.message === "json_required") return "invalid";
+    return Object.hasOwn(ui, error.message) ? error.message : "failed";
+  }
+
+  async function submitAnalysis() {
+    if (analyzing) return;
+    const text = message.value;
+    if (!text.trim()) {
+      analysisError = "empty_input";
+      updateAnalysisStatus();
+      message.focus();
+      return;
+    }
+    const submittedRevision = revision;
+    const requestedLocale = locale;
+    analyzing = true;
+    historyMode = false;
+    analysisError = "";
+    updateAnalysisStatus();
+    let needsTranslation = false;
+    try {
+      const data = await api("/api/analyze", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text, interface_language: requestedLocale}),
+      });
+      if (submittedRevision === revision) {
+        render(data);
+        needsTranslation = requestedLocale !== locale;
+      }
+    } catch (error) {
+      if (submittedRevision === revision) analysisError = errorKey(error);
+    } finally {
+      analyzing = false;
+      updateAnalysisStatus();
+      if (needsTranslation) void submitAnalysis();
+      else if (!$("historyPanel").hidden && !historyBusy) void refreshHistory();
+    }
+  }
+
+  $("analysisForm").addEventListener("submit", event => {
+    event.preventDefault();
+    void submitAnalysis();
+  });
+
+  function renderHistory() {
+    const list = $("historyList");
+    const entries = historyEntries || [];
+    $("historyStatus").textContent = historyBusy ? t("loading") : "";
+    $("historyError").hidden = !historyError;
+    $("historyError").textContent = historyError ? t(historyError) : "";
+    $("historyEmpty").hidden = historyBusy || !!historyError || historyEntries === null || entries.length !== 0;
+    $("clearHistoryButton").disabled = analyzing || historyBusy || !entries.length;
+    list.replaceChildren();
+    for (const entry of entries) {
+      const row = node("article", null, "history-row");
+      const preview = node("p", entry.original_message.length > 240 ? entry.original_message.slice(0, 240) + "…" : entry.original_message, "history-preview");
+      preview.dir = "auto";
+      const meta = node("div", null, "history-meta");
+      const level = entry.level.toLowerCase();
+      const timestamp = node("time", new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeStyle: "short"}).format(new Date(entry.created_at)), "hint");
+      timestamp.dateTime = entry.created_at;
+      meta.append(node("span", `${t(level)} · ${number(entry.score)}/100`, "badge " + level),
+                  node("span", `${t("language")}: ${languageName(entry.language)}`, "hint"), timestamp);
+      const actions = node("div", null, "history-actions");
+      const view = node("button", t("view"), "secondary");
+      const remove = node("button", t("delete"), "secondary");
+      view.type = remove.type = "button";
+      view.disabled = historyBusy;
+      remove.disabled = historyBusy || analyzing;
+      view.addEventListener("click", () => void historyAction(async () => {
+        const detail = await api(`/api/history/${entry.id}`);
+        revision += 1; // Ignore a pending analysis when opening a saved result.
+        analysisError = "";
+        message.value = detail.original_message;
+        updateCount();
+        historyMode = true;
+        render(detail.result);
+        $("resultPanel").focus();
+      }));
+      remove.addEventListener("click", () => void historyAction(async () => {
+        await api(`/api/history/${entry.id}`, {method: "DELETE"});
+        historyEntries = historyEntries.filter(item => item.id !== entry.id);
+        if (currentResult?.history_id === entry.id) resetResult();
+        $("historyTitle").focus();
+      }));
+      actions.append(view, remove);
+      row.append(preview, meta, actions);
+      list.append(row);
+    }
+  }
+
+  async function historyAction(action) {
+    if (historyBusy) return;
+    historyBusy = true;
+    historyError = "";
+    renderHistory();
+    try { await action(); }
+    catch (error) { historyError = errorKey(error); }
+    finally { historyBusy = false; renderHistory(); }
+  }
+
+  function refreshHistory() {
+    return historyAction(async () => { historyEntries = (await api("/api/history")).history; });
+  }
+
+  $("historyButton").addEventListener("click", () => {
+    const panel = $("historyPanel");
+    panel.hidden = !panel.hidden;
+    $("historyButton").setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden) {
+      $("historyTitle").focus();
+      void refreshHistory();
+    }
+  });
+
+  $("clearHistoryButton").addEventListener("click", () => {
+    if (!window.confirm(t("confirm"))) return;
+    void historyAction(async () => {
+      await api("/api/history", {method: "DELETE"});
+      historyEntries = [];
+      if (currentResult) resetResult();
+      $("historyTitle").focus();
+    });
+  });
+
+  const picker = $("interfaceLanguage");
+  try {
+    const saved = localStorage.getItem("scamshield.interfaceLanguage");
+    if (localeCodes.includes(saved)) locale = saved;
+  } catch { /* Storage can be blocked by the browser. */ }
+  picker.value = locale;
+  picker.addEventListener("change", () => {
+    if (!localeCodes.includes(picker.value)) return;
+    locale = picker.value;
+    try { localStorage.setItem("scamshield.interfaceLanguage", locale); } catch { /* Optional. */ }
+    applyLocale();
+    if (currentResult && !historyMode && currentResult.interface_language !== locale) void submitAnalysis();
+  });
+  applyLocale();
+
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
